@@ -3,6 +3,49 @@ import PropTypes from 'prop-types'
 import * as THREE from 'three'
 import { useFrame, useLoader } from 'react-three-fiber'
 
+const vertexShader = `
+      uniform float uTime;
+      uniform float uWidth;
+      uniform float uHeight;
+      uniform sampler2D tNoise;
+
+      attribute float aIndex;
+  
+      varying vec4 vColor;
+
+      void main() {
+        gl_PointSize = 0.4;
+
+        // Find where this vertex fits in the two-dimensional plane
+        vec2 uv = vec2(mod(aIndex, uWidth)/uWidth, mod(aIndex/uWidth, uHeight)/uHeight);
+        
+        // Sample from the noise texture with a slow translation over time
+        vec3 noise = 4.0 * sin(uTime) * texture2D( tNoise, vec2( uv.x + uTime * 0.02, uv.y)).rgb;
+  
+        // Stretch the points along the x-axis and oscillate along the y-axis with a sine wave
+        vec3 position = vec3(uv.x*16.0-8.0, 2.0 * sin(uTime * 2.0 + 4.0 * uv.x), uv.y * 10.0);
+
+        // Apply the noise to the position of this vertex
+        position = position + sin(vec3(noise.rgb));
+
+        // Fade the further vertices
+        vColor = vec4(0.003 , 0.41, 0.49, 0.8*(1.0 -uv.y));
+      
+        // Apply the matrices that ThreeJS give us from the camera and model position. Transform to our new position.
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+      }
+    `
+
+const fragmentShader = `
+      varying vec4 vColor;
+      uniform sampler2D tSprite;
+  
+      void main() {
+        // Apply the color that we got from the vertex shader
+        gl_FragColor = vColor;
+      }
+    `
+
 Particles.propTypes = {
   size: PropTypes.array.isRequired
 }
@@ -10,45 +53,6 @@ Particles.propTypes = {
 function Particles(props) {
   let clock = new THREE.Clock()
   let [width, height] = props.size
-
-  function random() {
-    return Math.random() - 0.5
-  }
-
-  const vertexShader = `
-      uniform float uTime;
-      uniform float uWidth;
-      uniform float uHeight;
-      uniform sampler2D tNoise;
-  
-      attribute vec3 velocity;
-      attribute float turbulence;
-      attribute float aIndex;
-  
-      varying vec4 vColor;
-
-      void main() {
-        gl_PointSize = 0.4;
-        vec2 uv = vec2(mod(aIndex, uWidth)/uWidth, mod(aIndex/uWidth, uHeight)/uHeight);
-      
-        vec3 noise = 4.0 * sin(uTime) * texture2D( tNoise, vec2( uv.x + uTime * 0.02, uv.y)).rgb;
-  
-        vec3 position = vec3(uv.x*16.0-8.0, 2.0 * sin(uTime * 2.0 + 4.0 * uv.x), uv.y * 10.0);
-        position = position + sin(vec3(noise.rgb));
-        vColor = vec4(0.003 , 0.41, 0.49, 0.8*(1.0 -uv.y));
-      
-        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-      }
-    `
-
-  const fragmentShader = `
-      varying vec4 vColor;
-      uniform sampler2D tSprite;
-  
-      void main() {
-        gl_FragColor = vColor;
-      }
-    `
 
   const noiseTexture = useLoader(THREE.TextureLoader, 'perlin-512.png')
 
@@ -77,61 +81,25 @@ function Particles(props) {
   }, [vertexShader, fragmentShader, width, height, noiseTexture])
 
   const geometry = React.useMemo(() => {
-    function generatePointCloudPositions(geometry, width, height) {
-      let numPoints = width * height
-      let positions = new Float32Array(numPoints * 3)
+    let geometry = new THREE.BufferGeometry()
+    let numPoints = width * height
+    let positions = new Float32Array(numPoints * 3)
+    let indices = new Uint16Array(numPoints)
 
-      let k = 0
-      for (let i = 0; i < width; i++) {
-        for (let j = 0; j < height; j++) {
-          let u = i / width
-          let v = j / height
-          let y = u - 0.5
-          let x = v - 0.5
-          let z = 0
-          positions[3 * k] = x
-          positions[3 * k + 1] = y
-          positions[3 * k + 2] = z
-          k++
-        }
+    let k = 0
+    for (let i = 0; i < width; i++) {
+      for (let j = 0; j < height; j++) {
+        positions[3 * k] = i
+        positions[3 * k + 1] = j
+        positions[3 * k + 2] = 0
+        indices[k] = k
+        k++
       }
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-      geometry.computeBoundingBox()
-      return geometry
     }
-
-    function generatePointCloudGeometry(width, height) {
-      let geometry = new THREE.BufferGeometry()
-      geometry = generatePointCloudPositions(geometry, width, height)
-
-      let numPoints = width * height
-
-      let indices = new Uint16Array(numPoints)
-      let velocities = new Float32Array(numPoints * 3)
-      let turbulence = new Float32Array(numPoints)
-
-      let k = 0
-      for (let i = 0; i < width; i++) {
-        for (let j = 0; j < height; j++) {
-          indices[k] = k //Index
-
-          velocities[k * 3 + 0] = 0.0002 * random() - 0.0001 // velocity.x
-          velocities[k * 3 + 1] = Math.abs(0.0005 * random()) // velocity.y
-          velocities[k * 3 + 2] = 0.0001 * random() // velocity.z
-
-          turbulence[k] = (j / height) * 2.0
-
-          k++
-        }
-      }
-
-      geometry.setAttribute('aIndex', new THREE.BufferAttribute(indices, 1))
-      geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3))
-      geometry.setAttribute('turbulence', new THREE.BufferAttribute(turbulence, 1))
-      return geometry
-    }
-
-    return generatePointCloudGeometry(width, height)
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geometry.computeBoundingBox()
+    geometry.setAttribute('aIndex', new THREE.BufferAttribute(indices, 1))
+    return geometry
   }, [width, height])
 
   useFrame(() => {
