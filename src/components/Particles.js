@@ -3,6 +3,7 @@ import PropTypes from 'prop-types'
 import * as THREE from 'three'
 import { useFrame, useLoader } from 'react-three-fiber'
 
+// [1] Create shaders
 const vertexShader = `
       uniform float uTime;
       uniform float uWidth;
@@ -54,32 +55,7 @@ function Particles(props) {
   let clock = new THREE.Clock()
   let [width, height] = props.size
 
-  const noiseTexture = useLoader(THREE.TextureLoader, 'perlin-512.png')
-
-  const material = React.useMemo(() => {
-    return new THREE.ShaderMaterial({
-      transparent: false,
-      depthWrite: false,
-      uniforms: {
-        uTime: {
-          value: 0.0
-        },
-        tNoise: {
-          value: noiseTexture
-        },
-        uWidth: {
-          value: width
-        },
-        uHeight: {
-          value: height
-        }
-      },
-      blending: THREE.AdditiveBlending,
-      vertexShader: vertexShader,
-      fragmentShader: fragmentShader
-    })
-  }, [vertexShader, fragmentShader, width, height, noiseTexture])
-
+  // [2] Initialize geometry
   const geometry = React.useMemo(() => {
     let geometry = new THREE.BufferGeometry()
     let numPoints = width * height
@@ -102,9 +78,40 @@ function Particles(props) {
     return geometry
   }, [width, height])
 
+  // [3] Frame updates
   useFrame(() => {
     material.uniforms.uTime.value = clock.getElapsedTime() * 0.1
   })
+
+  // [4] Load a noise texture
+  const noiseTexture = useLoader(THREE.TextureLoader, 'perlin-512.png')
+
+  // [5] Create the material
+  const material = React.useMemo(() => {
+    if (!noiseTexture) return null
+
+    return new THREE.ShaderMaterial({
+      transparent: false,
+      depthWrite: false,
+      uniforms: {
+        uTime: {
+          value: 0.0
+        },
+        tNoise: {
+          value: noiseTexture
+        },
+        uWidth: {
+          value: width
+        },
+        uHeight: {
+          value: height
+        }
+      },
+      blending: THREE.AdditiveBlending,
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader
+    })
+  }, [width, height, noiseTexture])
 
   return <points material={material} geometry={geometry} />
 }

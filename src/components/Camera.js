@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import * as THREE from 'three'
 import { useThree } from 'react-three-fiber'
 
-function Camera() {
+function Camera({ position, lookAt }) {
   const camera = useRef()
   const { setDefaultCamera } = useThree()
 
@@ -15,8 +15,8 @@ function Camera() {
       aspect={window.innerWidth / window.innerHeight}
       near={1}
       far={10000}
-      position={[0, -1.5, 10]}
-      lookAt={() => new THREE.Vector3(0, 0, 0)}
+      position={position}
+      lookAt={() => new THREE.Vector3(lookAt)}
     />
   )
 }

@@ -14,9 +14,7 @@ function App() {
         onCreated={({ gl }) => {
           gl.setClearColor(new THREE.Color('#000000'))
         }}>
-        <Camera />
-        <ambientLight />
-        <pointLight position={[10, 10, 10]} />
+        <Camera position={[0, 1, 12]} lookAt={[0, 0, 0]} />
         <Suspense fallback={null}>
           <Particles size={[256, 256]} />
           <RenderEffects />
